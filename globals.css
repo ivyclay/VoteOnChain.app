@@ -1,0 +1,95 @@
+/**
+ * VoteOnChain Blockchain Configuration
+ * =====================================
+ * 
+ * This file contains the configuration for connecting to the blockchain.
+ * Currently set up for DogeOS (EVM-compatible L2 on Dogecoin).
+ * 
+ * WALLET INTEGRATION: Coming Soon
+ * The smart contracts are deployed and ready. Wallet connection
+ * will be added in a future update to enable gas payments.
+ */
+
+export const BLOCKCHAIN_CONFIG = {
+  // Whether blockchain features are enabled
+  enabled: true,
+  
+  // Current deployment status
+  status: 'CONTRACTS_READY' as const, // 'NOT_DEPLOYED' | 'CONTRACTS_READY' | 'FULLY_ACTIVE'
+  
+  // Wallet integration status
+  walletIntegration: 'COMING_SOON' as const, // 'COMING_SOON' | 'ACTIVE'
+  
+  // Supported networks
+  networks: {
+    dogeos: {
+      name: 'DogeOS',
+      chainId: 568,
+      rpcUrl: process.env.NEXT_PUBLIC_DOGEOS_RPC_URL || 'https://rpc.dogeos.com',
+      blockExplorer: 'https://explorer.dogeos.com',
+      nativeCurrency: {
+        name: 'DOGE',
+        symbol: 'DOGE',
+        decimals: 18,
+      },
+      recommended: true,
+    },
+    polygon: {
+      name: 'Polygon',
+      chainId: 137,
+      rpcUrl: process.env.NEXT_PUBLIC_POLYGON_RPC_URL || 'https://polygon-rpc.com',
+      blockExplorer: 'https://polygonscan.com',
+      nativeCurrency: {
+        name: 'MATIC',
+        symbol: 'MATIC',
+        decimals: 18,
+      },
+      recommended: false,
+    },
+    base: {
+      name: 'Base',
+      chainId: 8453,
+      rpcUrl: process.env.NEXT_PUBLIC_BASE_RPC_URL || 'https://mainnet.base.org',
+      blockExplorer: 'https://basescan.org',
+      nativeCurrency: {
+        name: 'ETH',
+        symbol: 'ETH',
+        decimals: 18,
+      },
+      recommended: false,
+    },
+  },
+  
+  // Default network
+  defaultNetwork: 'dogeos',
+  
+  // Contract addresses (to be filled after deployment)
+  contracts: {
+    voterRegistry: process.env.NEXT_PUBLIC_VOTER_REGISTRY_ADDRESS || '',
+    voteOnChain: process.env.NEXT_PUBLIC_VOTE_ON_CHAIN_ADDRESS || '',
+  },
+};
+
+// Vote types matching smart contract enum
+export enum BlockchainVoteType {
+  YES_NO = 0,
+  MULTIPLE_CHOICE = 1,
+  MULTIPLE_SELECTION = 2,
+}
+
+// Verification status matching smart contract enum
+export enum BlockchainVerificationStatus {
+  UNREGISTERED = 0,
+  PENDING = 1,
+  VERIFIED = 2,
+  REJECTED = 3,
+}
+
+// Election status matching smart contract enum
+export enum BlockchainElectionStatus {
+  ACTIVE = 0,
+  PAUSED = 1,
+  ENDED = 2,
+}
+
+export type NetworkKey = keyof typeof BLOCKCHAIN_CONFIG.networks;
