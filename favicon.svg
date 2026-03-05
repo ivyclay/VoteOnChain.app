@@ -1,336 +1,200 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowLeft, Calendar, Users, BarChart3, Eye } from "lucide-react";
-import Link from "next/link";
-import { format } from "date-fns";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
+import * as React from 'react';
+import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
+import { Check, ChevronRight, Circle } from 'lucide-react';
 
-interface Election {
-  id: string;
-  title: string;
-  description: string;
-  voteType: string;
-  options?: string[];
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-  _count: {
-    votes: number;
-  };
-}
+import { cn } from '@/lib/utils';
 
-interface Results {
-  totalVotes: number;
-  results: any;
-}
+const ContextMenu = ContextMenuPrimitive.Root;
 
-interface AuditEntry {
-  id: string;
-  voter: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  votedAt: string;
-}
+const ContextMenuTrigger = ContextMenuPrimitive.Trigger;
 
-const COLORS = ["#00ffff", "#10b981", "#fbbf24", "#f59e0b", "#ef4444", "#8b5cf6"];
+const ContextMenuGroup = ContextMenuPrimitive.Group;
 
-export default function ElectionDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const electionId = params?.id as string;
+const ContextMenuPortal = ContextMenuPrimitive.Portal;
 
-  const [election, setElection] = useState<Election | null>(null);
-  const [results, setResults] = useState<Results | null>(null);
-  const [audit, setAudit] = useState<AuditEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+const ContextMenuSub = ContextMenuPrimitive.Sub;
 
-  useEffect(() => {
-    if (!electionId) return;
+const ContextMenuRadioGroup = ContextMenuPrimitive.RadioGroup;
 
-    const fetchData = async () => {
-      try {
-        // Fetch election details
-        const electionRes = await fetch(`/api/elections/${electionId}`);
-        if (electionRes?.ok) {
-          const electionData = await electionRes.json();
-          setElection(electionData);
-        }
-
-        // Fetch results
-        const resultsRes = await fetch(`/api/elections/${electionId}/results`);
-        if (resultsRes?.ok) {
-          const resultsData = await resultsRes.json();
-          setResults(resultsData);
-        }
-
-        // Fetch audit trail
-        const auditRes = await fetch(`/api/elections/${electionId}/audit`);
-        if (auditRes?.ok) {
-          const auditData = await auditRes.json();
-          setAudit(auditData ?? []);
-        }
-      } catch (error) {
-        console.error("Error fetching election data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [electionId]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0f1c]">
-        <div className="text-cyan-400 text-xl">Loading...</div>
-      </div>
-    );
+const ContextMenuSubTrigger = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.SubTrigger>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubTrigger> & {
+    inset?: boolean;
   }
+>(({ className, inset, children, ...props }, ref) => (
+  <ContextMenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn(
+      'flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground',
+      inset && 'pl-8',
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <ChevronRight className="ml-auto h-4 w-4" />
+  </ContextMenuPrimitive.SubTrigger>
+));
+ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName;
 
-  if (!election) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0f1c]">
-        <div className="text-red-400 text-xl">Election not found</div>
-      </div>
-    );
+const ContextMenuSubContent = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>
+>(({ className, ...props }, ref) => (
+  <ContextMenuPrimitive.SubContent
+    ref={ref}
+    className={cn(
+      'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+      className
+    )}
+    {...props}
+  />
+));
+ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName;
+
+const ContextMenuContent = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content>
+>(({ className, ...props }, ref) => (
+  <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Content
+      ref={ref}
+      className={cn(
+        'z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+        className
+      )}
+      {...props}
+    />
+  </ContextMenuPrimitive.Portal>
+));
+ContextMenuContent.displayName = ContextMenuPrimitive.Content.displayName;
+
+const ContextMenuItem = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Item> & {
+    inset?: boolean;
   }
+>(({ className, inset, ...props }, ref) => (
+  <ContextMenuPrimitive.Item
+    ref={ref}
+    className={cn(
+      'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      inset && 'pl-8',
+      className
+    )}
+    {...props}
+  />
+));
+ContextMenuItem.displayName = ContextMenuPrimitive.Item.displayName;
 
-  const renderResults = () => {
-    if (!results || results?.totalVotes === 0) {
-      return (
-        <div className="glassmorphic-card p-8 text-center">
-          <p className="text-gray-400">No votes cast yet</p>
-        </div>
-      );
-    }
+const ContextMenuCheckboxItem = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.CheckboxItem>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.CheckboxItem>
+>(({ className, children, checked, ...props }, ref) => (
+  <ContextMenuPrimitive.CheckboxItem
+    ref={ref}
+    className={cn(
+      'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      className
+    )}
+    checked={checked}
+    {...props}
+  >
+    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <ContextMenuPrimitive.ItemIndicator>
+        <Check className="h-4 w-4" />
+      </ContextMenuPrimitive.ItemIndicator>
+    </span>
+    {children}
+  </ContextMenuPrimitive.CheckboxItem>
+));
+ContextMenuCheckboxItem.displayName =
+  ContextMenuPrimitive.CheckboxItem.displayName;
 
-    if (election?.voteType === "YES_NO") {
-      const data = [
-        { name: "Yes", value: results?.results?.yes ?? 0, percentage: results?.results?.yesPercentage?.toFixed?.(1) ?? 0 },
-        { name: "No", value: results?.results?.no ?? 0, percentage: results?.results?.noPercentage?.toFixed?.(1) ?? 0 },
-      ];
+const ContextMenuRadioItem = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.RadioItem>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.RadioItem>
+>(({ className, children, ...props }, ref) => (
+  <ContextMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(
+      'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      className
+    )}
+    {...props}
+  >
+    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <ContextMenuPrimitive.ItemIndicator>
+        <Circle className="h-2 w-2 fill-current" />
+      </ContextMenuPrimitive.ItemIndicator>
+    </span>
+    {children}
+  </ContextMenuPrimitive.RadioItem>
+));
+ContextMenuRadioItem.displayName = ContextMenuPrimitive.RadioItem.displayName;
 
-      return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="glassmorphic-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Vote Distribution</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry?.name}: ${entry?.percentage}%`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {data?.map?.((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS?.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+const ContextMenuLabel = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.Label>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Label> & {
+    inset?: boolean;
+  }
+>(({ className, inset, ...props }, ref) => (
+  <ContextMenuPrimitive.Label
+    ref={ref}
+    className={cn(
+      'px-2 py-1.5 text-sm font-semibold text-foreground',
+      inset && 'pl-8',
+      className
+    )}
+    {...props}
+  />
+));
+ContextMenuLabel.displayName = ContextMenuPrimitive.Label.displayName;
 
-          <div className="glassmorphic-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Vote Counts</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
-                <XAxis dataKey="name" tickLine={false} tick={{ fontSize: 10 }} />
-                <YAxis tickLine={false} tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} />
-                <Bar dataKey="value" fill="#00ffff" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      );
-    } else {
-      const data = results?.results?.options ?? [];
+const ContextMenuSeparator = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.Separator>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Separator>
+>(({ className, ...props }, ref) => (
+  <ContextMenuPrimitive.Separator
+    ref={ref}
+    className={cn('-mx-1 my-1 h-px bg-border', className)}
+    {...props}
+  />
+));
+ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName;
 
-      return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="glassmorphic-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Vote Distribution</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry?.option}: ${entry?.percentage?.toFixed?.(1) ?? 0}%`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="votes"
-                  nameKey="option"
-                >
-                  {data?.map?.((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS?.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="glassmorphic-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Vote Counts</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <XAxis dataKey="option" tickLine={false} tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={60} />
-                <YAxis tickLine={false} tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} />
-                <Bar dataKey="votes" fill="#10b981" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      );
-    }
-  };
-
+const ContextMenuShortcut = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) => {
   return (
-    <div className="min-h-screen bg-[#0a0f1c]">
-      {/* Background effects */}
-      <div className="fixed inset-0 bg-gradient-to-b from-blue-950/20 via-[#0a0f1c] to-red-950/20" />
-
-      {/* Content */}
-      <main className="relative z-10 max-w-7xl mx-auto px-4 py-8">
-        {/* Back button */}
-        <Link href="/admin">
-          <button className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 mb-6 transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
-          </button>
-        </Link>
-
-        {/* Election Header */}
-        <div className="glassmorphic-card p-6 mb-8">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">{election?.title}</h1>
-              <p className="text-gray-400">{election?.description}</p>
-            </div>
-            <span
-              className={`px-4 py-2 rounded-full text-sm font-medium ${
-                election?.isActive
-                  ? "bg-emerald-500/20 text-emerald-400"
-                  : "bg-gray-500/20 text-gray-400"
-              }`}
-            >
-              {election?.isActive ? "Active" : "Inactive"}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-3 p-4 bg-white/5 rounded-lg">
-              <Calendar className="w-5 h-5 text-cyan-400" />
-              <div>
-                <div className="text-sm text-gray-400">Election Period</div>
-                <div className="text-white font-medium">
-                  {election?.startDate ? format(new Date(election.startDate), "MMM d") : "N/A"} -{" "}
-                  {election?.endDate ? format(new Date(election.endDate), "MMM d, yyyy") : "N/A"}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-4 bg-white/5 rounded-lg">
-              <Users className="w-5 h-5 text-emerald-400" />
-              <div>
-                <div className="text-sm text-gray-400">Total Votes</div>
-                <div className="text-white font-medium text-2xl">
-                  {results?.totalVotes ?? 0}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-4 bg-white/5 rounded-lg">
-              <BarChart3 className="w-5 h-5 text-yellow-400" />
-              <div>
-                <div className="text-sm text-gray-400">Vote Type</div>
-                <div className="text-white font-medium">
-                  {election?.voteType === "YES_NO" && "Yes/No"}
-                  {election?.voteType === "MULTIPLE_CHOICE" && "Multiple Choice"}
-                  {election?.voteType === "MULTIPLE_SELECTION" && "Multiple Selection"}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Results Section */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white mb-6">Results</h2>
-          {renderResults()}
-        </div>
-
-        {/* Audit Trail */}
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-6">
-            Audit Trail ({audit?.length ?? 0} votes)
-          </h2>
-          {audit?.length === 0 ? (
-            <div className="glassmorphic-card p-8 text-center">
-              <Eye className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-              <p className="text-gray-400">No votes recorded yet</p>
-            </div>
-          ) : (
-            <div className="glassmorphic-card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        Voter
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        Email
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        Voted At
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {audit?.map?.((entry, index) => (
-                      <motion.tr
-                        key={entry?.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                      >
-                        <td className="px-6 py-4">
-                          <span className="text-white font-medium">
-                            {entry?.voter?.name}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-gray-400">{entry?.voter?.email}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-gray-400">
-                            {entry?.votedAt ? format(new Date(entry.votedAt), "MMM d, yyyy HH:mm") : "N/A"}
-                          </span>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
+    <span
+      className={cn(
+        'ml-auto text-xs tracking-widest text-muted-foreground',
+        className
+      )}
+      {...props}
+    />
   );
-}
+};
+ContextMenuShortcut.displayName = 'ContextMenuShortcut';
+
+export {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuCheckboxItem,
+  ContextMenuRadioItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuGroup,
+  ContextMenuPortal,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuRadioGroup,
+};

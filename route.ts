@@ -1,245 +1,204 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import {
-  Shield,
-  LogOut,
-  Vote,
-  Upload,
-  CheckCircle,
-  XCircle,
-  Clock,
-  AlertCircle,
-  Star,
-  Flag,
-} from "lucide-react";
-import { signOut } from "next-auth/react";
-import Link from "next/link";
-import ElectionsList from "./_components/elections-list";
-import UploadIdModal from "./_components/upload-id-modal";
+import { X, Upload, AlertCircle, CheckCircle } from "lucide-react";
 
-export default function VoterDashboard() {
-  const { data: session, status } = useSession() || {};
-  const router = useRouter();
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [idStatus, setIdStatus] = useState<any>(null);
-  const [mounted, setMounted] = useState(false);
+interface UploadIdModalProps {
+  onClose: () => void;
+}
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+export default function UploadIdModal({ onClose }: UploadIdModalProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/auth/login");
-    } else if (status === "authenticated" && (session?.user as any)?.role === "ADMIN") {
-      router.push("/admin");
-    }
-  }, [status, session, router]);
-
-  useEffect(() => {
-    const fetchIdStatus = async () => {
-      try {
-        const response = await fetch("/api/id-verification/status");
-        if (response?.ok) {
-          const data = await response.json();
-          setIdStatus(data);
-        }
-      } catch (error) {
-        console.error("Error fetching ID status:", error);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e?.target?.files?.[0];
+    if (selectedFile) {
+      // Check file size (max 10MB)
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setError("File size must be less than 10MB");
+        return;
       }
-    };
 
-    if (status === "authenticated") {
-      fetchIdStatus();
-    }
-  }, [status]);
+      // Check file type
+      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"];
+      if (!allowedTypes.includes(selectedFile.type)) {
+        setError("File must be an image (JPEG, PNG, WebP) or PDF");
+        return;
+      }
 
-  if (status === "loading" || !mounted) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0f1c]">
-        <div className="text-blue-400 text-xl">Loading...</div>
-      </div>
-    );
-  }
-
-  if ((session?.user as any)?.role === "ADMIN") {
-    return null;
-  }
-
-  const getStatusIcon = () => {
-    switch (idStatus?.status) {
-      case "APPROVED":
-        return <CheckCircle className="w-5 h-5 text-green-400" />;
-      case "REJECTED":
-        return <XCircle className="w-5 h-5 text-red-400" />;
-      default:
-        return <Clock className="w-5 h-5 text-yellow-400" />;
+      setFile(selectedFile);
+      setError("");
     }
   };
 
-  const getStatusColor = () => {
-    switch (idStatus?.status) {
-      case "APPROVED":
-        return "bg-green-500/10 text-green-400 border-green-500/30";
-      case "REJECTED":
-        return "bg-red-500/10 text-red-400 border-red-500/30";
-      default:
-        return "bg-yellow-500/10 text-yellow-400 border-yellow-500/30";
+  const handleUpload = async () => {
+    if (!file) {
+      setError("Please select a file");
+      return;
     }
-  };
 
-  const getStatusMessage = () => {
-    switch (idStatus?.status) {
-      case "APPROVED":
-        return "Your ID has been verified. You are now eligible to vote in all active elections!";
-      case "REJECTED":
-        return "Your ID verification was not approved. Please upload a new document.";
-      default:
-        return idStatus?.hasSubmitted
-          ? "Your ID is being reviewed by election officials. You'll be notified once approved."
-          : "Please upload your government-issued ID to participate in voting.";
+    setIsUploading(true);
+    setError("");
+
+    try {
+      // Step 1: Get presigned URL
+      const presignedResponse = await fetch("/api/id-verification/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type,
+        }),
+      });
+
+      if (!presignedResponse?.ok) {
+        throw new Error("Failed to get upload URL");
+      }
+
+      const { uploadUrl, cloud_storage_path } = await presignedResponse.json();
+
+      // Step 2: Upload file to S3 using presigned URL
+      const uploadHeaders: Record<string, string> = {
+        "Content-Type": file.type,
+      };
+
+      // Check if Content-Disposition is required in the signed headers
+      const urlObj = new URL(uploadUrl);
+      const signedHeaders = urlObj.searchParams.get("X-Amz-SignedHeaders");
+      if (signedHeaders?.includes?.("content-disposition")) {
+        uploadHeaders["Content-Disposition"] = "attachment";
+      }
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: uploadHeaders,
+        body: file,
+      });
+
+      if (!uploadResponse?.ok) {
+        throw new Error("Failed to upload file");
+      }
+
+      // Step 3: Complete the upload by saving to database
+      const completeResponse = await fetch("/api/id-verification/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cloud_storage_path }),
+      });
+
+      if (!completeResponse?.ok) {
+        throw new Error("Failed to complete upload");
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      setError(err?.message ?? "Failed to upload ID document. Please try again.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0f1c]">
-      {/* Background effects */}
-      <div className="fixed inset-0 stars-pattern" />
-      <div className="fixed inset-0 stripes-pattern" />
-      <div className="fixed top-0 left-0 w-full h-2 bg-gradient-to-r from-red-600 via-white to-blue-600 z-50" />
-      <div className="fixed inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-600/10 rounded-full blur-3xl" />
-      </div>
-
-      {/* Header */}
-      <header className="sticky top-2 z-40 glassmorphic-navy border-b border-blue-500/20">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-600 via-white to-blue-600 flex items-center justify-center">
-              <Vote className="w-6 h-6 text-blue-900" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">VoteOnChain</h1>
-              <p className="text-sm text-gray-400">Voter Portal</p>
-            </div>
-          </Link>
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:block text-right">
-              <p className="text-sm font-medium text-white">{session?.user?.name}</p>
-              <p className="text-xs text-gray-400">{session?.user?.email}</p>
-            </div>
-            <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="p-2 glassmorphic-card hover:border-red-500/50 transition-all"
-            >
-              <LogOut className="w-5 h-5 text-red-400" />
-            </button>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a0f1c]/80 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md glassmorphic-card p-6"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white">Upload ID Document</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/5 rounded-lg transition-all"
+          >
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="relative z-10 max-w-7xl mx-auto px-4 py-8">
-        {/* Welcome Banner */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glassmorphic-card p-6 mb-8 border-blue-500/20 relative overflow-hidden"
-        >
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 via-white to-blue-600" />
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-              <Flag className="w-6 h-6 text-blue-400" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">Welcome, {session?.user?.name}!</h2>
-              <p className="text-gray-400">Your voice matters. Exercise your right to vote securely.</p>
-            </div>
+        {success ? (
+          <div className="text-center py-8">
+            <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Upload Successful!
+            </h3>
+            <p className="text-gray-400">
+              Your ID is now under review. You'll be notified once it's approved.
+            </p>
           </div>
-        </motion.div>
+        ) : (
+          <div className="space-y-6">
+            {error && (
+              <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
 
-        {/* ID Verification Status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className={`glassmorphic-card p-6 mb-8 border ${
-            getStatusColor()
-          }`}
-        >
-          <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="mt-1">{getStatusIcon()}</div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-1 flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
-                  ID Verification: {idStatus?.status ?? "PENDING"}
-                </h3>
-                <p className="text-gray-300 mb-2">{getStatusMessage()}</p>
-                {idStatus?.adminNotes && (
-                  <div className="mt-3 p-3 bg-black/30 rounded-lg">
+            <div>
+              <p className="text-gray-300 mb-4">
+                Please upload a clear photo of your government-issued ID (driver's
+                license, passport, etc.).
+              </p>
+              <div className="border-2 border-dashed border-white/20 rounded-lg p-8 text-center hover:border-blue-500/50 transition-all">
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer flex flex-col items-center gap-3"
+                >
+                  <Upload className="w-12 h-12 text-blue-400" />
+                  <div>
+                    <p className="text-white font-medium mb-1">
+                      Click to upload file
+                    </p>
                     <p className="text-sm text-gray-400">
-                      <strong>Note from officials:</strong> {idStatus.adminNotes}
+                      JPEG, PNG, WebP, or PDF (max 10MB)
                     </p>
                   </div>
-                )}
+                </label>
               </div>
+              {file && (
+                <div className="mt-4 p-4 bg-white/5 rounded-lg">
+                  <p className="text-sm text-gray-400">Selected file:</p>
+                  <p className="text-white font-medium">{file?.name}</p>
+                  <p className="text-sm text-gray-400">
+                    {(file?.size / 1024 / 1024)?.toFixed?.(2) ?? 0} MB
+                  </p>
+                </div>
+              )}
             </div>
-            {(idStatus?.status === "PENDING" && !idStatus?.hasSubmitted) ||
-            idStatus?.status === "REJECTED" ? (
+
+            <div className="flex gap-3">
               <button
-                onClick={() => setShowUploadModal(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-blue-600 rounded-lg font-semibold text-white hover:shadow-2xl hover:shadow-blue-500/30 transition-all whitespace-nowrap"
+                onClick={onClose}
+                className="flex-1 px-6 py-3 glassmorphic-card font-semibold text-gray-300 hover:border-white/20 transition-all"
               >
-                <Upload className="w-5 h-5" />
-                Upload ID
+                Cancel
               </button>
-            ) : null}
+              <button
+                onClick={handleUpload}
+                disabled={!file || isUploading}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-green-500 rounded-lg font-semibold text-black hover:shadow-2xl hover:shadow-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploading ? "Uploading..." : "Upload"}
+              </button>
+            </div>
           </div>
-        </motion.div>
-
-        {/* Elections Section */}
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-            <Vote className="w-7 h-7 text-blue-400" />
-            Active Elections
-            <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-          </h2>
-
-          {idStatus?.status !== "APPROVED" && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="glassmorphic-card p-6 mb-6 border border-yellow-500/30"
-            >
-              <div className="flex items-center gap-3 text-yellow-400">
-                <AlertCircle className="w-5 h-5" />
-                <p className="font-medium">
-                  ID verification required to cast your vote. Please complete verification above.
-                </p>
-              </div>
-            </motion.div>
-          )}
-
-          <ElectionsList idVerified={idStatus?.status === "APPROVED"} />
-        </div>
-      </main>
-
-      {/* Upload ID Modal */}
-      {showUploadModal && (
-        <UploadIdModal
-          onClose={() => {
-            setShowUploadModal(false);
-            window.location.reload();
-          }}
-        />
-      )}
+        )}
+      </motion.div>
     </div>
   );
 }

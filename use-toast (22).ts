@@ -1,71 +1,31 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+'use client';
 
-export const dynamic = "force-dynamic";
+import { useTheme } from 'next-themes';
+import { Toaster as Sonner } from 'sonner';
 
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
+type ToasterProps = React.ComponentProps<typeof Sonner>;
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+const Toaster = ({ ...props }: ToasterProps) => {
+  const { theme = 'system' } = useTheme();
 
-    const body = await request.json();
-    const { cloud_storage_path } = body;
-
-    if (!cloud_storage_path) {
-      return NextResponse.json(
-        { error: "Missing cloud_storage_path" },
-        { status: 400 }
-      );
-    }
-
-    const userId = (session.user as any).id;
-
-    // Check if user already has ID verification
-    const existingVerification = await prisma.idVerification.findUnique({
-      where: { userId },
-    });
-
-    if (existingVerification) {
-      // Update existing verification
-      await prisma.idVerification.update({
-        where: { userId },
-        data: {
-          cloudStoragePath: cloud_storage_path,
-          isPublic: false,
-          status: "PENDING",
-          adminNotes: null,
-          reviewedAt: null,
+  return (
+    <Sonner
+      theme={theme as ToasterProps['theme']}
+      className="toaster group"
+      toastOptions={{
+        classNames: {
+          toast:
+            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg',
+          description: 'group-[.toast]:text-muted-foreground',
+          actionButton:
+            'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
+          cancelButton:
+            'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
         },
-      });
-    } else {
-      // Create new verification
-      await prisma.idVerification.create({
-        data: {
-          userId,
-          cloudStoragePath: cloud_storage_path,
-          isPublic: false,
-          status: "PENDING",
-        },
-      });
-    }
+      }}
+      {...props}
+    />
+  );
+};
 
-    // Update user's verification status to PENDING
-    await prisma.user.update({
-      where: { id: userId },
-      data: { idVerificationStatus: "PENDING" },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("ID verification complete error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
+export { Toaster };

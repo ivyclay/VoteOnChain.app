@@ -1,451 +1,463 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft,
-  Calendar,
-  Vote as VoteIcon,
+  Shield,
+  Lock,
+  Eye,
+  TrendingUp,
+  Users,
   CheckCircle,
-  AlertCircle,
+  Link2,
+  ArrowRight,
+  Star,
+  Building2,
+  Landmark,
+  Vote,
+  FileCheck,
+  Scale,
+  Globe,
+  BadgeCheck,
+  Fingerprint,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
-import { format } from "date-fns";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
-interface Election {
-  id: string;
-  title: string;
-  description: string;
-  voteType: string;
-  options?: string[];
-  startDate: string;
-  endDate: string;
-  hasVoted?: boolean;
-}
+const features = [
+  {
+    icon: Link2,
+    title: "True On-Chain Voting",
+    description: "Votes recorded on DogeOS blockchain via Solidity smart contracts. Immutable and decentralized.",
+    color: "text-purple-500",
+  },
+  {
+    icon: Shield,
+    title: "Immutable Records",
+    description: "Every vote is permanently recorded on-chain. No alterations, no deletions, ever.",
+    color: "text-red-500",
+  },
+  {
+    icon: Lock,
+    title: "Military-Grade Security",
+    description: "Post-quantum cryptography protects against current and future cyber threats.",
+    color: "text-blue-500",
+  },
+  {
+    icon: Eye,
+    title: "Voter Privacy",
+    description: "Your vote remains secret while maintaining complete election transparency.",
+    color: "text-white",
+  },
+  {
+    icon: CheckCircle,
+    title: "Verifiable Results",
+    description: "Independent audit trails let anyone verify election integrity.",
+    color: "text-red-500",
+  },
+  {
+    icon: TrendingUp,
+    title: "Real-Time Counting",
+    description: "Watch results update instantly as votes are securely recorded.",
+    color: "text-blue-500",
+  },
+  {
+    icon: Fingerprint,
+    title: "Identity Verified",
+    description: "Secure ID verification ensures one citizen, one vote.",
+    color: "text-white",
+  },
+  {
+    icon: Link2,
+    title: "Complete Audit Trail",
+    description: "Transparent participation records without compromising ballot secrecy.",
+    color: "text-red-500",
+  },
+  {
+    icon: Globe,
+    title: "Vote From Anywhere",
+    description: "Secure remote voting for military, overseas citizens, and accessibility.",
+    color: "text-blue-500",
+  },
+];
 
-interface Results {
-  totalVotes: number;
-  results: any;
-}
+const useCases = [
+  {
+    icon: Building2,
+    title: "Homeowner Associations",
+    description: "Streamline HOA elections, board votes, and community decisions with transparent, tamper-proof results.",
+    stats: "50,000+ HOAs nationwide",
+  },
+  {
+    icon: Landmark,
+    title: "Local & State Elections",
+    description: "Modernize county, city, and state elections with blockchain security and instant auditable results.",
+    stats: "3,143 counties ready",
+  },
+  {
+    icon: Vote,
+    title: "Federal Elections",
+    description: "The future of presidential and congressional voting—secure, accessible, and trusted by all.",
+    stats: "158M+ registered voters",
+  },
+];
 
-const COLORS = ["#00ffff", "#10b981", "#fbbf24", "#f59e0b", "#ef4444", "#8b5cf6"];
+const benefits = [
+  { label: "Elimination of voter fraud", icon: ShieldCheck },
+  { label: "Instant, accurate results", icon: TrendingUp },
+  { label: "Reduced election costs", icon: Scale },
+  { label: "Increased voter participation", icon: Users },
+  { label: "ADA accessibility compliance", icon: BadgeCheck },
+  { label: "Military & overseas voting", icon: Globe },
+];
 
-export default function VoteElectionPage() {
-  const { data: session } = useSession() || {};
-  const params = useParams();
+export default function Home() {
+  const { data: session, status } = useSession() || {};
   const router = useRouter();
-  const electionId = params?.id as string;
-
-  const [election, setElection] = useState<Election | null>(null);
-  const [results, setResults] = useState<Results | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasVoted, setHasVoted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-
-  // Vote selections
-  const [yesNoVote, setYesNoVote] = useState<"yes" | "no" | null>(null);
-  const [multipleChoiceVote, setMultipleChoiceVote] = useState<string | null>(null);
-  const [multipleSelectionVotes, setMultipleSelectionVotes] = useState<string[]>([]);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    if (!electionId) return;
+    setMounted(true);
+  }, []);
 
-    const fetchData = async () => {
-      try {
-        // Fetch election details
-        const electionRes = await fetch(`/api/elections/${electionId}`);
-        if (electionRes?.ok) {
-          const electionData = await electionRes.json();
-          setElection(electionData);
-        }
-
-        // Fetch elections list to check if voted
-        const electionsRes = await fetch("/api/elections");
-        if (electionsRes?.ok) {
-          const electionsData = await electionsRes.json();
-          const currentElection = electionsData?.find?.((e: any) => e?.id === electionId);
-          setHasVoted(currentElection?.hasVoted ?? false);
-        }
-
-        // Fetch results
-        const resultsRes = await fetch(`/api/elections/${electionId}/results`);
-        if (resultsRes?.ok) {
-          const resultsData = await resultsRes.json();
-          setResults(resultsData);
-        }
-      } catch (error) {
-        console.error("Error fetching election data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [electionId]);
-
-  const handleVoteSubmit = async () => {
-    setError("");
-    setIsSubmitting(true);
-
-    try {
-      let voteData: any = {};
-
-      if (election?.voteType === "YES_NO") {
-        if (!yesNoVote) {
-          setError("Please select Yes or No");
-          setIsSubmitting(false);
-          return;
-        }
-        voteData = { vote: yesNoVote };
-      } else if (election?.voteType === "MULTIPLE_CHOICE") {
-        if (!multipleChoiceVote) {
-          setError("Please select an option");
-          setIsSubmitting(false);
-          return;
-        }
-        voteData = { selected: multipleChoiceVote };
-      } else if (election?.voteType === "MULTIPLE_SELECTION") {
-        if (multipleSelectionVotes?.length === 0) {
-          setError("Please select at least one option");
-          setIsSubmitting(false);
-          return;
-        }
-        voteData = { selected: multipleSelectionVotes };
-      }
-
-      const response = await fetch(`/api/elections/${electionId}/vote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voteData }),
-      });
-
-      if (!response?.ok) {
-        const data = await response.json();
-        setError(data?.error ?? "Failed to submit vote");
-        setIsSubmitting(false);
-        return;
-      }
-
-      setSuccess(true);
-      setTimeout(() => {
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      const userRole = (session.user as any)?.role;
+      if (userRole === "ADMIN") {
+        router.push("/admin");
+      } else {
         router.push("/voter");
-      }, 2000);
-    } catch (err) {
-      setError("An error occurred. Please try again.");
-      setIsSubmitting(false);
+      }
     }
-  };
+  }, [status, session, router]);
 
-  const toggleMultipleSelection = (option: string) => {
-    if (multipleSelectionVotes?.includes?.(option)) {
-      setMultipleSelectionVotes(
-        multipleSelectionVotes?.filter?.((v) => v !== option) ?? []
-      );
-    } else {
-      setMultipleSelectionVotes([...multipleSelectionVotes, option]);
-    }
-  };
-
-  const renderResults = () => {
-    if (!results || results?.totalVotes === 0) {
-      return (
-        <div className="glassmorphic-card p-8 text-center">
-          <p className="text-gray-400">No votes cast yet</p>
-        </div>
-      );
-    }
-
-    if (election?.voteType === "YES_NO") {
-      const data = [
-        { name: "Yes", value: results?.results?.yes ?? 0, percentage: results?.results?.yesPercentage?.toFixed?.(1) ?? 0 },
-        { name: "No", value: results?.results?.no ?? 0, percentage: results?.results?.noPercentage?.toFixed?.(1) ?? 0 },
-      ];
-
-      return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="glassmorphic-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Vote Distribution</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry?.name}: ${entry?.percentage}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {data?.map?.((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS?.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="glassmorphic-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Vote Counts</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <XAxis dataKey="name" tickLine={false} tick={{ fontSize: 10 }} />
-                <YAxis tickLine={false} tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} />
-                <Bar dataKey="value" fill="#00ffff" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      );
-    } else {
-      const data = results?.results?.options ?? [];
-
-      return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="glassmorphic-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Vote Distribution</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry?.option}: ${entry?.percentage?.toFixed?.(1) ?? 0}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="votes"
-                  nameKey="option"
-                >
-                  {data?.map?.((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS?.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="glassmorphic-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Vote Counts</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <XAxis dataKey="option" tickLine={false} tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={60} />
-                <YAxis tickLine={false} tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ backgroundColor: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} />
-                <Bar dataKey="votes" fill="#10b981" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      );
-    }
-  };
-
-  if (isLoading) {
+  if (status === "loading" || !mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0f1c]">
-        <div className="text-cyan-400 text-xl">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!election) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0f1c]">
-        <div className="text-red-400 text-xl">Election not found</div>
+        <div className="text-blue-400 text-xl">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0f1c]">
+    <main className="min-h-screen bg-[#0a0f1c] relative overflow-hidden">
       {/* Background effects */}
-      <div className="fixed inset-0 bg-gradient-to-b from-blue-950/20 via-[#0a0f1c] to-red-950/20" />
+      <div className="absolute inset-0 stars-pattern" />
+      <div className="absolute inset-0 stripes-pattern" />
+      <div className="absolute inset-0">
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-600 via-white to-blue-600" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-600/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-900/5 rounded-full blur-3xl" />
+      </div>
+
+      {/* Navigation */}
+      <nav className="relative z-20 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-600 via-white to-blue-600 flex items-center justify-center">
+              <Vote className="w-6 h-6 text-blue-900" />
+            </div>
+            <span className="text-2xl font-bold text-white">VoteOnChain</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/features" className="text-gray-300 hover:text-white transition-colors hidden sm:block">
+              Features
+            </Link>
+            <Link href="/auth/login">
+              <button className="px-5 py-2 text-white border border-white/20 rounded-lg hover:bg-white/5 transition-all">
+                Sign In
+              </button>
+            </Link>
+            <Link href="/auth/signup">
+              <button className="px-5 py-2 bg-gradient-to-r from-red-600 to-blue-600 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all">
+                Get Started
+              </button>
+            </Link>
+          </div>
+        </div>
+      </nav>
 
       {/* Content */}
-      <main className="relative z-10 max-w-4xl mx-auto px-4 py-8">
-        {/* Back button */}
-        <Link href="/voter">
-          <button className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 mb-6 transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
-          </button>
-        </Link>
-
-        {/* Election Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glassmorphic-card p-6 mb-8"
-        >
-          <h1 className="text-3xl font-bold text-white mb-2">{election?.title}</h1>
-          <p className="text-gray-400 mb-4">{election?.description}</p>
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            <Calendar className="w-4 h-4" />
-            <span>
-              {election?.startDate ? format(new Date(election.startDate), "MMM d, yyyy") : "N/A"} -{" "}
-              {election?.endDate ? format(new Date(election.endDate), "MMM d, yyyy") : "N/A"}
-            </span>
-          </div>
-        </motion.div>
-
-        {/* Success Message */}
-        {success && (
+      <div className="relative z-10">
+        {/* Hero Section */}
+        <section className="min-h-[90vh] flex flex-col items-center justify-center px-4 py-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glassmorphic-card p-8 mb-8 border border-emerald-500/30"
+            transition={{ duration: 0.8 }}
+            className="text-center max-w-5xl mx-auto"
           >
-            <div className="flex flex-col items-center text-center">
-              <CheckCircle className="w-16 h-16 text-emerald-400 mb-4" />
-              <h3 className="text-2xl font-bold text-white mb-2">Vote Submitted!</h3>
-              <p className="text-gray-400">Your vote has been securely recorded.</p>
-            </div>
-          </motion.div>
-        )}
+            {/* Blockchain Badge */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2, duration: 0.6 }}
+              className="flex flex-wrap justify-center gap-3 mb-8"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/30">
+                <Link2 className="w-4 h-4 text-purple-400" />
+                <span className="text-sm text-purple-300 font-medium">
+                  Powered by Solidity Smart Contracts
+                </span>
+              </div>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glassmorphic-navy border-blue-500/30">
+                <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                <span className="text-sm text-blue-200 font-medium">
+                  DogeOS • Polygon • Base Compatible
+                </span>
+              </div>
+            </motion.div>
 
-        {/* Voting Interface or Results */}
-        {!success && (
-          <>
-            {hasVoted ? (
-              <div>
+            {/* Main Headline */}
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.8 }}
+              className="text-5xl md:text-7xl font-bold mb-6 leading-tight"
+            >
+              <span className="text-white">The Future of</span>
+              <br />
+              <span className="bg-gradient-to-r from-red-500 via-white to-blue-500 bg-clip-text text-transparent">
+                American Democracy
+              </span>
+            </motion.h1>
+
+            {/* Subheadline */}
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.8 }}
+              className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed"
+            >
+              Secure, transparent, and immutable voting powered by blockchain technology.
+              From HOA elections to federal voting—every ballot protected, every voice heard.
+            </motion.p>
+
+            {/* CTA Buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.8 }}
+              className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+            >
+              <Link href="/auth/signup">
+                <button className="group relative px-8 py-4 bg-gradient-to-r from-red-600 to-blue-600 rounded-lg font-semibold text-white overflow-hidden hover:shadow-2xl hover:shadow-blue-500/30 transition-all duration-300 text-lg">
+                  <span className="relative z-10 flex items-center gap-2">
+                    Register to Vote
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                </button>
+              </Link>
+              <Link href="/features">
+                <button className="px-8 py-4 glassmorphic-card border-blue-500/30 font-semibold text-white hover:border-blue-400/60 hover:glow-blue transition-all duration-300 text-lg">
+                  Explore Features
+                </button>
+              </Link>
+            </motion.div>
+
+            {/* Trust Badges */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6, duration: 0.8 }}
+              className="grid grid-cols-3 gap-4 md:gap-8 mt-16 max-w-3xl mx-auto"
+            >
+              <div className="glassmorphic-card p-4 md:p-6 border-red-500/20">
+                <div className="text-3xl md:text-4xl font-bold text-red-500 mb-2">100%</div>
+                <div className="text-xs md:text-sm text-gray-400">Tamper-Proof</div>
+              </div>
+              <div className="glassmorphic-card p-4 md:p-6 border-white/20">
+                <div className="text-3xl md:text-4xl font-bold text-white mb-2">∞</div>
+                <div className="text-xs md:text-sm text-gray-400">Immutable</div>
+              </div>
+              <div className="glassmorphic-card p-4 md:p-6 border-blue-500/20">
+                <div className="text-3xl md:text-4xl font-bold text-blue-500 mb-2">256-bit</div>
+                <div className="text-xs md:text-sm text-gray-400">Encryption</div>
+              </div>
+            </motion.div>
+          </motion.div>
+        </section>
+
+        {/* Use Cases Section */}
+        <section className="py-20 px-4 relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-950/20 to-transparent" />
+          <div className="max-w-7xl mx-auto relative z-10">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="text-center mb-16"
+            >
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                Securing Elections at <span className="text-blue-400">Every Level</span>
+              </h2>
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+                From community associations to the highest offices in the land
+              </p>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {useCases.map((useCase, index) => (
                 <motion.div
+                  key={index}
                   initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="glassmorphic-card p-6 mb-8 border border-emerald-500/30"
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.15, duration: 0.6 }}
+                  className="group glassmorphic-card p-8 hover:scale-105 transition-all duration-300 border-blue-500/20 hover:border-blue-400/40"
                 >
-                  <div className="flex items-center gap-3 text-emerald-400">
-                    <CheckCircle className="w-5 h-5" />
-                    <p className="font-medium">You have already voted in this election</p>
+                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-red-600/20 to-blue-600/20 flex items-center justify-center mb-6 group-hover:glow-blue transition-all duration-300">
+                    <useCase.icon className="w-8 h-8 text-blue-400" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-3">
+                    {useCase.title}
+                  </h3>
+                  <p className="text-gray-400 mb-4 leading-relaxed">
+                    {useCase.description}
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-blue-400">
+                    <Star className="w-4 h-4 fill-blue-400" />
+                    <span>{useCase.stats}</span>
                   </div>
                 </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-                <h2 className="text-2xl font-bold text-white mb-6">Results</h2>
-                {renderResults()}
-              </div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glassmorphic-card p-6"
-              >
-                <h2 className="text-2xl font-bold text-white mb-6">Cast Your Vote</h2>
+        {/* Features Section */}
+        <section className="py-20 px-4">
+          <div className="max-w-7xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="text-center mb-16"
+            >
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                Why <span className="text-red-500">Vote</span><span className="text-blue-500">OnChain</span>?
+              </h2>
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+                Enterprise-grade security meets civic responsibility
+              </p>
+            </motion.div>
 
-                {error && (
-                  <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                {/* Yes/No Vote */}
-                {election?.voteType === "YES_NO" && (
-                  <div className="space-y-4">
-                    <button
-                      onClick={() => setYesNoVote("yes")}
-                      className={`w-full p-6 rounded-lg border-2 transition-all ${
-                        yesNoVote === "yes"
-                          ? "border-emerald-500 bg-emerald-500/20"
-                          : "border-white/10 hover:border-emerald-500/50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xl font-semibold text-white">Yes</span>
-                        {yesNoVote === "yes" && (
-                          <CheckCircle className="w-6 h-6 text-emerald-400" />
-                        )}
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => setYesNoVote("no")}
-                      className={`w-full p-6 rounded-lg border-2 transition-all ${
-                        yesNoVote === "no"
-                          ? "border-red-500 bg-red-500/20"
-                          : "border-white/10 hover:border-red-500/50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xl font-semibold text-white">No</span>
-                        {yesNoVote === "no" && (
-                          <CheckCircle className="w-6 h-6 text-red-400" />
-                        )}
-                      </div>
-                    </button>
-                  </div>
-                )}
-
-                {/* Multiple Choice */}
-                {election?.voteType === "MULTIPLE_CHOICE" && (
-                  <div className="space-y-3">
-                    {election?.options?.map?.((option, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setMultipleChoiceVote(option)}
-                        className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
-                          multipleChoiceVote === option
-                            ? "border-cyan-500 bg-cyan-500/20"
-                            : "border-white/10 hover:border-cyan-500/50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg text-white">{option}</span>
-                          {multipleChoiceVote === option && (
-                            <CheckCircle className="w-5 h-5 text-cyan-400" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Multiple Selection */}
-                {election?.voteType === "MULTIPLE_SELECTION" && (
-                  <div className="space-y-3">
-                    <p className="text-sm text-gray-400 mb-4">
-                      Select all that apply
-                    </p>
-                    {election?.options?.map?.((option, index) => (
-                      <button
-                        key={index}
-                        onClick={() => toggleMultipleSelection(option)}
-                        className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
-                          multipleSelectionVotes?.includes?.(option)
-                            ? "border-cyan-500 bg-cyan-500/20"
-                            : "border-white/10 hover:border-cyan-500/50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg text-white">{option}</span>
-                          {multipleSelectionVotes?.includes?.(option) && (
-                            <CheckCircle className="w-5 h-5 text-cyan-400" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <button
-                  onClick={handleVoteSubmit}
-                  disabled={isSubmitting}
-                  className="w-full mt-8 py-4 bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-lg font-semibold text-black text-lg hover:shadow-2xl hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {features.map((feature, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1, duration: 0.6 }}
+                  className="group glassmorphic-card p-6 hover:scale-105 transition-all duration-300 cursor-pointer"
                 >
-                  <VoteIcon className="w-6 h-6" />
-                  {isSubmitting ? "Submitting Vote..." : "Submit Vote"}
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center mb-4 group-hover:glow-blue transition-all duration-300">
+                    <feature.icon className={`w-6 h-6 ${feature.color}`} />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">
+                    {feature.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Benefits Banner */}
+        <section className="py-16 px-4 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-red-900/20 via-blue-900/30 to-red-900/20" />
+          <div className="max-w-7xl mx-auto relative z-10">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="flex flex-wrap justify-center gap-6 md:gap-10"
+            >
+              {benefits.map((benefit, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  className="flex items-center gap-3 text-white"
+                >
+                  <benefit.icon className="w-5 h-5 text-blue-400" />
+                  <span className="text-sm md:text-base font-medium">{benefit.label}</span>
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="py-20 px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="max-w-4xl mx-auto text-center glassmorphic-card p-12 border-blue-500/30 relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 via-white to-blue-600" />
+            <div className="flex justify-center gap-2 mb-6">
+              <Star className="w-8 h-8 text-yellow-400 fill-yellow-400" />
+              <Star className="w-8 h-8 text-yellow-400 fill-yellow-400" />
+              <Star className="w-8 h-8 text-yellow-400 fill-yellow-400" />
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Ready to Secure Your Vote?
+            </h2>
+            <p className="text-xl text-gray-300 mb-8">
+              Join millions of Americans demanding transparent, secure elections
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/auth/signup">
+                <button className="px-8 py-4 bg-gradient-to-r from-red-600 to-blue-600 rounded-lg font-semibold text-white hover:shadow-2xl hover:shadow-blue-500/30 transition-all duration-300">
+                  Create Your Account
                 </button>
-              </motion.div>
-            )}
-          </>
-        )}
-      </main>
-    </div>
+              </Link>
+              <Link href="/features">
+                <button className="px-8 py-4 border border-white/30 rounded-lg font-semibold text-white hover:bg-white/5 transition-all duration-300">
+                  Learn More
+                </button>
+              </Link>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Footer */}
+        <footer className="py-8 px-4 border-t border-white/10">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded bg-gradient-to-br from-red-600 via-white to-blue-600 flex items-center justify-center">
+                <Vote className="w-4 h-4 text-blue-900" />
+              </div>
+              <span className="text-lg font-bold text-white">VoteOnChain</span>
+            </div>
+            <p className="text-gray-500 text-sm text-center">
+              Securing democracy, one block at a time. 🇺🇸
+            </p>
+            <div className="flex items-center gap-4">
+              <Link href="/features" className="text-gray-400 hover:text-white text-sm transition-colors">
+                Features
+              </Link>
+              <Link href="/auth/login" className="text-gray-400 hover:text-white text-sm transition-colors">
+                Sign In
+              </Link>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </main>
   );
 }

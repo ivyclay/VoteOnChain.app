@@ -2,13 +2,11 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getFileUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -16,47 +14,37 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { adminNotes } = body;
-    const verificationId = params?.id;
-
-    if (!verificationId) {
-      return NextResponse.json(
-        { error: "Verification ID is required" },
-        { status: 400 }
-      );
-    }
-
-    const verification = await prisma.idVerification.findUnique({
-      where: { id: verificationId },
-    });
-
-    if (!verification) {
-      return NextResponse.json(
-        { error: "Verification not found" },
-        { status: 404 }
-      );
-    }
-
-    // Update verification status
-    await prisma.idVerification.update({
-      where: { id: verificationId },
-      data: {
-        status: "APPROVED",
-        adminNotes: adminNotes || null,
-        reviewedAt: new Date(),
+    const verifications = await prisma.idVerification.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            idVerificationStatus: true,
+          },
+        },
       },
+      orderBy: { createdAt: "desc" },
     });
 
-    // Update user's verification status
-    await prisma.user.update({
-      where: { id: verification.userId },
-      data: { idVerificationStatus: "APPROVED" },
-    });
+    // Generate signed URLs for each ID document
+    const verificationsWithUrls = await Promise.all(
+      verifications.map(async (verification) => {
+        const imageUrl = await getFileUrl(
+          verification.cloudStoragePath,
+          verification.isPublic
+        );
+        return {
+          ...verification,
+          imageUrl,
+        };
+      })
+    );
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(verificationsWithUrls);
   } catch (error) {
-    console.error("Approve ID verification error:", error);
+    console.error("Get ID verifications error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -1,264 +1,160 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Users as UsersIcon, Shield, CheckCircle, XCircle, Clock } from "lucide-react";
+import { format } from "date-fns";
 
-interface CreateElectionModalProps {
-  onClose: () => void;
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  idVerificationStatus: string;
+  createdAt: string;
+  _count: {
+    votes: number;
+  };
 }
 
-export default function CreateElectionModal({
-  onClose,
-}: CreateElectionModalProps) {
-  const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [voteType, setVoteType] = useState("YES_NO");
-  const [options, setOptions] = useState<string[]>(["", ""]);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [isActive, setIsActive] = useState(true);
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+export default function UserManagement() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const addOption = () => {
-    setOptions([...options, ""]);
-  };
-
-  const removeOption = (index: number) => {
-    if (options?.length > 2) {
-      const newOptions = options?.filter?.((_, i) => i !== index) ?? [];
-      setOptions(newOptions);
-    }
-  };
-
-  const updateOption = (index: number, value: string) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    // Validate options for multi-choice votes
-    if (voteType === "MULTIPLE_CHOICE" || voteType === "MULTIPLE_SELECTION") {
-      const validOptions = options?.filter?.((opt) => opt?.trim?.() !== "") ?? [];
-      if (validOptions?.length < 2) {
-        setError("Please provide at least 2 options");
-        return;
-      }
-    }
-
-    setIsLoading(true);
-
+  const fetchUsers = async () => {
     try {
-      const body: any = {
-        title,
-        description,
-        voteType,
-        startDate,
-        endDate,
-        isActive,
-      };
-
-      if (voteType === "MULTIPLE_CHOICE" || voteType === "MULTIPLE_SELECTION") {
-        body.options = options?.filter?.((opt) => opt?.trim?.() !== "") ?? [];
-      }
-
-      const response = await fetch("/api/elections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!response?.ok) {
+      const response = await fetch("/api/admin/users");
+      if (response?.ok) {
         const data = await response.json();
-        setError(data?.error ?? "Something went wrong");
-        setIsLoading(false);
-        return;
+        setUsers(data ?? []);
       }
-
-      // Refresh the page to show new election
-      router.refresh();
-      onClose();
-      window.location.reload();
-    } catch (err) {
-      setError("An error occurred. Please try again.");
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    } finally {
       setIsLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "APPROVED":
+        return <CheckCircle className="w-5 h-5 text-green-400" />;
+      case "REJECTED":
+        return <XCircle className="w-5 h-5 text-red-400" />;
+      default:
+        return <Clock className="w-5 h-5 text-yellow-400" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "APPROVED":
+        return "bg-green-500/20 text-green-400";
+      case "REJECTED":
+        return "bg-red-500/20 text-red-400";
+      default:
+        return "bg-yellow-500/20 text-yellow-400";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-blue-400">Loading users...</div>
+      </div>
+    );
+  }
+
+  if (users?.length === 0) {
+    return (
+      <div className="glassmorphic-card p-12 text-center">
+        <UsersIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+        <p className="text-gray-400 text-lg">No users found</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a0f1c]/80 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto glassmorphic-card p-6"
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-white">Create New Election</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/5 rounded-lg transition-all"
-          >
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Election Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-[#0a0f1c]/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20"
-              placeholder="2024 Board of Directors Election"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-4 py-3 bg-[#0a0f1c]/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20"
-              rows={3}
-              placeholder="Vote for the new board members"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Vote Type
-            </label>
-            <select
-              value={voteType}
-              onChange={(e) => setVoteType(e.target.value)}
-              className="w-full px-4 py-3 bg-[#0a0f1c]/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="YES_NO">Yes/No Vote</option>
-              <option value="MULTIPLE_CHOICE">Multiple Choice (Pick One)</option>
-              <option value="MULTIPLE_SELECTION">
-                Multiple Selection (Pick Multiple)
-              </option>
-            </select>
-          </div>
-
-          {(voteType === "MULTIPLE_CHOICE" || voteType === "MULTIPLE_SELECTION") && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-300">
-                  Options
-                </label>
-                <button
-                  type="button"
-                  onClick={addOption}
-                  className="flex items-center gap-1 text-sm text-blue-400 hover:text-cyan-300"
+    <div>
+      <h2 className="text-2xl font-bold text-white mb-6">User Management</h2>
+      <div className="glassmorphic-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                  User
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                  Role
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                  ID Status
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                  Votes Cast
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                  Joined
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {users?.map?.((user, index) => (
+                <motion.tr
+                  key={user?.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="border-b border-white/5 hover:bg-white/5 transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
-                  Add Option
-                </button>
-              </div>
-              <div className="space-y-2">
-                {options?.map?.((option, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={option}
-                      onChange={(e) => updateOption(index, e.target.value)}
-                      className="flex-1 px-4 py-2 bg-[#0a0f1c]/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
-                      placeholder={`Option ${index + 1}`}
-                    />
-                    {options?.length > 2 && (
-                      <button
-                        type="button"
-                        onClick={() => removeOption(index)}
-                        className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                  <td className="px-6 py-4">
+                    <div>
+                      <div className="text-white font-medium">{user?.name}</div>
+                      <div className="text-sm text-gray-400">{user?.email}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        user?.role === "ADMIN"
+                          ? "bg-purple-500/20 text-purple-400"
+                          : "bg-blue-500/20 text-blue-400"
+                      }`}
+                    >
+                      {user?.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      {getStatusIcon(user?.idVerificationStatus ?? "PENDING")}
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          getStatusColor(user?.idVerificationStatus ?? "PENDING")
+                        }`}
                       >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Start Date
-              </label>
-              <input
-                type="datetime-local"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-4 py-3 bg-[#0a0f1c]/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                End Date
-              </label>
-              <input
-                type="datetime-local"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-4 py-3 bg-[#0a0f1c]/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="w-4 h-4 bg-[#0a0f1c]/50 border-white/10 rounded text-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-            <label htmlFor="isActive" className="text-sm text-gray-300">
-              Election is active (voters can see and participate)
-            </label>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 glassmorphic-card font-semibold text-gray-300 hover:border-white/20 transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-green-500 rounded-lg font-semibold text-black hover:shadow-2xl hover:shadow-blue-500/50 transition-all disabled:opacity-50"
-            >
-              {isLoading ? "Creating..." : "Create Election"}
-            </button>
-          </div>
-        </form>
-      </motion.div>
+                        {user?.idVerificationStatus}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-white">{user?._count?.votes ?? 0}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-gray-400 text-sm">
+                      {user?.createdAt ? format(new Date(user.createdAt), "MMM d, yyyy") : "N/A"}
+                    </span>
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

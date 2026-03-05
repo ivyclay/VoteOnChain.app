@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(
+export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
@@ -16,8 +16,6 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
-    const userStatus = (session.user as any).idVerificationStatus;
     const electionId = params?.id;
 
     if (!electionId) {
@@ -27,17 +25,11 @@ export async function POST(
       );
     }
 
-    // Check if user's ID is approved
-    if (userStatus !== "APPROVED") {
-      return NextResponse.json(
-        { error: "Your ID must be approved before you can vote" },
-        { status: 403 }
-      );
-    }
-
-    // Check if election exists and is active
     const election = await prisma.election.findUnique({
       where: { id: electionId },
+      include: {
+        votes: true,
+      },
     });
 
     if (!election) {
@@ -47,85 +39,84 @@ export async function POST(
       );
     }
 
-    if (!election.isActive) {
-      return NextResponse.json(
-        { error: "Election is not active" },
-        { status: 400 }
-      );
-    }
+    const totalVotes = election.votes.length;
+    let results: any = {};
 
-    const now = new Date();
-    if (now < election.startDate || now > election.endDate) {
-      return NextResponse.json(
-        { error: "Election is not currently open for voting" },
-        { status: 400 }
-      );
-    }
-
-    // Check if user has already voted
-    const existingVote = await prisma.vote.findUnique({
-      where: {
-        userId_electionId: {
-          userId,
-          electionId,
-        },
-      },
-    });
-
-    if (existingVote) {
-      return NextResponse.json(
-        { error: "You have already voted in this election" },
-        { status: 400 }
-      );
-    }
-
-    // Get vote data from request
-    const body = await request.json();
-    const { voteData } = body;
-
-    if (!voteData) {
-      return NextResponse.json(
-        { error: "Vote data is required" },
-        { status: 400 }
-      );
-    }
-
-    // Validate vote data based on election type
     if (election.voteType === "YES_NO") {
-      if (!voteData.vote || (voteData.vote !== "yes" && voteData.vote !== "no")) {
-        return NextResponse.json(
-          { error: "Invalid vote data for Yes/No vote" },
-          { status: 400 }
-        );
-      }
+      const yesVotes = election.votes.filter(
+        (vote) => (vote.voteData as any).vote === "yes"
+      ).length;
+      const noVotes = election.votes.filter(
+        (vote) => (vote.voteData as any).vote === "no"
+      ).length;
+
+      results = {
+        yes: yesVotes,
+        no: noVotes,
+        yesPercentage: totalVotes > 0 ? (yesVotes / totalVotes) * 100 : 0,
+        noPercentage: totalVotes > 0 ? (noVotes / totalVotes) * 100 : 0,
+      };
     } else if (election.voteType === "MULTIPLE_CHOICE") {
-      if (!voteData.selected || typeof voteData.selected !== "string") {
-        return NextResponse.json(
-          { error: "Invalid vote data for Multiple Choice vote" },
-          { status: 400 }
-        );
-      }
+      const options = (election.options as string[]) ?? [];
+      const optionCounts: Record<string, number> = {};
+
+      options.forEach((option) => {
+        optionCounts[option] = 0;
+      });
+
+      election.votes.forEach((vote) => {
+        const selected = (vote.voteData as any).selected;
+        if (selected && optionCounts.hasOwnProperty(selected)) {
+          optionCounts[selected]++;
+        }
+      });
+
+      results = {
+        options: Object.keys(optionCounts).map((option) => ({
+          option,
+          votes: optionCounts[option],
+          percentage: totalVotes > 0 ? (optionCounts[option] / totalVotes) * 100 : 0,
+        })),
+      };
     } else if (election.voteType === "MULTIPLE_SELECTION") {
-      if (!voteData.selected || !Array.isArray(voteData.selected)) {
-        return NextResponse.json(
-          { error: "Invalid vote data for Multiple Selection vote" },
-          { status: 400 }
-        );
-      }
+      const options = (election.options as string[]) ?? [];
+      const optionCounts: Record<string, number> = {};
+
+      options.forEach((option) => {
+        optionCounts[option] = 0;
+      });
+
+      election.votes.forEach((vote) => {
+        const selected = (vote.voteData as any).selected ?? [];
+        if (Array.isArray(selected)) {
+          selected.forEach((opt: string) => {
+            if (optionCounts.hasOwnProperty(opt)) {
+              optionCounts[opt]++;
+            }
+          });
+        }
+      });
+
+      results = {
+        options: Object.keys(optionCounts).map((option) => ({
+          option,
+          votes: optionCounts[option],
+          percentage: totalVotes > 0 ? (optionCounts[option] / totalVotes) * 100 : 0,
+        })),
+      };
     }
 
-    // Create vote
-    const vote = await prisma.vote.create({
-      data: {
-        userId,
-        electionId,
-        voteData,
+    return NextResponse.json({
+      election: {
+        id: election.id,
+        title: election.title,
+        voteType: election.voteType,
       },
+      totalVotes,
+      results,
     });
-
-    return NextResponse.json({ success: true, vote }, { status: 201 });
   } catch (error) {
-    console.error("Vote error:", error);
+    console.error("Get results error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
